@@ -1,0 +1,5 @@
+[env]
+PYTHONPATH = "./src"
+
+[tools]
+python = "3.11"
