@@ -21,7 +21,7 @@ pip install -r requirements.txt
 """
 
 [tasks."setup:aisafetylab"]
-description = "Install AISafetyLab dependency in deps directory"
+description = "Install AISafetyLab dependency in deps directory" # @TODO make this a proper library/module and axe this task
 run = """
 mkdir -p deps
 cd deps

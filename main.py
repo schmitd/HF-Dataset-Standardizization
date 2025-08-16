@@ -1,8 +1,9 @@
-# from aisafetylab.attack.attackers.multilingual import MultilingualManager XXX @TODO broken CUDA_HOME
+from aisafetylab.attack.attackers.multilingual import MultilingualManager
 from datasets import load_dataset, load_dataset_builder, get_dataset_split_names, DatasetBuilder
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
+import torch
 
 from typing import Dict, List, Optional
 
@@ -58,6 +59,7 @@ def infer_suitibility(repo_name: str) -> DatasetBuilder:
     
     return builder
 
+# XXX instead of remapping, could the model determine how to run the dataset and run the mutations?
 def remap_features(repo_name: str) -> Dict[str, str]:
     """
     Feature remapping using Ollama with Gemma3n for remapping columns.
@@ -97,7 +99,7 @@ def remap_features(repo_name: str) -> Dict[str, str]:
             Mappings MUST be one-to-one, never mapping the same collumn twice
             
             Return only a JSON object with the mapping, like:
-            {{"prompt": "<column_name1>", "responses": "<column_name2>", ...}}
+            {{"prompt": "<column_nam>", "responses": "<column_name2>", ...}}
             
             If a feature doesn't correspond to any column, you MUST omit it from the JSON.
 
@@ -121,6 +123,74 @@ def remap_features(repo_name: str) -> Dict[str, str]:
         return {}
 
 
+def perform_spanish_multilingual_mutation(repo_name: str) -> List[Dict]:
+    """
+    Perform Spanish multilingual mutation on preference evaluation datasets using AISafetyLab.
+    
+    Args:
+        repo_name: Name of the dataset repository
+        sample_size: Number of samples to process (default: 5)
+        
+    Returns:
+        List[Dict]: List of mutation results with original and translated queries
+    """
+    try:
+        splits = get_dataset_split_names(repo_name)
+        test_split = [split for split in splits if "test" in split][0]
+        dataset = load_dataset(repo_name, split=test_split)
+        
+        feature_mapping = remap_features(repo_name)
+        
+        if not feature_mapping:
+            print(f"No feature mapping found for {repo_name}")
+            return []
+        
+        from aisafetylab.attack.mutation.Translate import Translate
+        spanish_translator = Translate(language='es')
+        
+        results = []
+        aligned_dataset = dataset.align(feature_mapping)
+        
+        for i in range(len(aligned_dataset)):
+            example_aligned = aligned_dataset[i]
+            prompt = None
+            if "prompt" in example_aligned:
+                prompt = example_aligned["prompt"]
+            elif "chosen_response" in example_aligned:
+                prompt = f"Evaluate this response: {example_aligned['chosen_response']}"
+            else:
+                # Fallback: use first text column
+                text_columns = [col for col in aligned_dataset.column_names if isinstance(example_aligned[col], str)]
+                if text_columns:
+                    prompt = example_aligned[text_columns[0]]
+                else:
+                    continue
+            
+            try:
+                spanish_mutation = spanish_translator.translate(prompt)
+                
+                result = {
+                    "example_idx": i,
+                    "original_query": prompt,
+                    "spanish_mutation": spanish_mutation,
+                    "feature_mapping": feature_mapping,
+                    "dataset_columns": dataset.column_names
+                }
+                results.append(result)
+                
+                print(f"Example {i}: Original: '{prompt[:100]}...' -> Spanish: '{spanish_mutation[:100]}...'")
+                
+            except Exception as e:
+                print(f"Error mutating example {i}: {e}")
+                continue
+        
+        return results
+        
+    except Exception as e:
+        print(f"Error in Spanish multilingual mutation for {repo_name}: {e}")
+        return []
+
+
 def main():    
     example_repos = [
         "Anthropic/hh-rlhf",
@@ -139,6 +209,14 @@ def main():
         if builder.info.suitability:
             alignment = remap_features(repo)
             print(f"Feature alignment: {alignment}")
+            
+            # Demonstrate Spanish multilingual mutation
+            print(f"\n--- Spanish Multilingual Mutation for {repo} ---")
+            spanish_results = perform_spanish_multilingual_mutation(repo)
+            if spanish_results:
+                print(f"Successfully processed {len(spanish_results)} examples with Spanish mutations")
+            else:
+                print("No Spanish mutations generated")
 
 
 if __name__ == "__main__":

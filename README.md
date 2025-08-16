@@ -23,8 +23,9 @@ This project uses [mise](https://mise.jdx.dev/) for managing Python virtual envi
 
 3. **Install AISafetyLab dependency:**
    ```bash
-   # The dependency is already installed in the deps/ directory
-   # It was installed using: pip install -e .
+   # installed in the deps/ directory
+   # follow the instructions at (https://github.com/thu-coai/AISafetyLab/tree/main#)[the project\'s github repo]
+   pip install -e git@github.com:thu-coai/AISafetyLab.git .
    ```
 
 ## Project Structure
